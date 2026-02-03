@@ -1,0 +1,699 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>訂房方案枚舉（離線）</title>
+<style>
+    :root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans TC", Arial, sans-serif; }
+    body { margin: 0; background:#f6f7f9; color:#111; }
+    header { padding: 18px 16px; background:#fff; border-bottom:1px solid #e6e8ee; }
+    header h1 { margin:0; font-size:18px; }
+    main { padding: 14px 12px 28px; max-width: 980px; margin: 0 auto; }
+    .grid { display:grid; grid-template-columns: 1fr; gap: 12px; }
+    @media (min-width: 880px){ .grid{ grid-template-columns: 360px 1fr; align-items:start; } }
+    .card { background:#fff; border:1px solid #e6e8ee; border-radius:14px; box-shadow:0 2px 10px rgba(0,0,0,.03); }
+    .card h2 { margin:0; padding: 14px 14px 8px; font-size:15px; }
+    .card .body { padding: 0 14px 14px; }
+    label { display:block; font-size:13px; color:#444; margin: 10px 0 6px; }
+
+    input[type="number"]{
+    width:100%;
+    max-width: 220px;
+    padding:8px 10px;
+    border:1px solid #d9dde7;
+    border-radius:10px;
+    font-size:15px;
+    box-sizing:border-box;
+    }
+
+    .toggle { display:flex; align-items:center; gap:10px; margin-top:10px; }
+    .btn { width:100%; margin-top:12px; padding:11px 12px; border:none; border-radius:12px; font-size:16px; background:#111; color:#fff; }
+    .btn:active { transform: scale(.99); }
+    .muted { font-size:12px; color:#666; line-height:1.4; }
+    .tag { display:inline-block; font-size:12px; padding:2px 8px; border-radius:999px; background:#f0f2f6; border:1px solid #e6e8ee; margin-left:6px; color:#444; }
+    .plan { padding: 12px; border:1px solid #e6e8ee; border-radius:12px; margin-top:10px; }
+    .plan h3 { margin:0 0 6px; font-size:14px; }
+    .kv { display:grid; grid-template-columns: 110px 1fr; gap:6px 10px; font-size:13px; }
+    .k { color:#555; }
+    .v { color:#111; }
+    .warn { color:#b00020; font-weight:600; }
+    table { width:100%; border-collapse:collapse; margin-top:10px; font-size:13px; }
+    th, td { border-bottom:1px solid #eef0f5; padding:10px 6px; text-align:left; vertical-align:top; }
+    th { color:#555; font-weight:600; }
+    .right { text-align:right; }
+    .small { font-size:12px; color:#666; }
+    footer { padding: 12px 16px; color:#777; font-size:12px; text-align:center; }
+    /* ===== Modal ===== */
+    .modal.hidden { display:none; }
+    .modal { position:fixed; inset:0; z-index:9999; }
+    .modal-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.35); }
+    .modal-sheet{
+    position:absolute; left:50%; top:50%;
+    transform:translate(-50%,-50%);
+    width:min(520px, calc(100vw - 24px));
+    max-height: calc(100vh - 24px);
+    overflow:auto;
+    background:#fff;
+    border:1px solid #e6e8ee;
+    border-radius:16px;
+    box-shadow:0 10px 40px rgba(0,0,0,.18);
+    }
+    .modal-head{
+    position:sticky; top:0;
+    display:flex; justify-content:space-between; align-items:center;
+    padding:12px 14px;
+    background:#fff;
+    border-bottom:1px solid #eef0f5;
+    }
+    .modal-title{ font-weight:700; font-size:16px; }
+    .modal-sub{ font-size:12px; color:#666; margin-top:2px; }
+    .modal-x{
+    border:none; background:#f0f2f6; border:1px solid #e6e8ee;
+    border-radius:10px; padding:8px 10px; font-size:14px;
+    }
+    .modal-body{ padding:14px; }
+
+    .combo-link{
+    cursor:pointer;
+    text-decoration:underline;
+    text-underline-offset: 2px;
+    }
+
+</style>
+</head>
+<body>
+<header>
+    <h1>訂房方案試算</h1>
+</header>
+
+<main>
+    <div class="grid">
+    <section class="card">
+        <h2>輸入</h2>
+        <div class="body">
+        <label>人數</label>
+        <input id="people" type="number" min="1" max="22" value="16" inputmode="numeric" />
+
+        <label>晚數</label>
+        <input id="nights" type="number" min="1" max="30" value="1" inputmode="numeric" />
+
+        <div class="toggle">
+            <input id="holiday" type="checkbox" />
+            <label for="holiday" style="margin:0;">假日</label>
+        </div>
+        <div class="toggle">
+            <input id="longHoliday" type="checkbox" />
+            <label for="longHoliday" style="margin:0;">連假</label>
+        </div>
+        <div class="toggle">
+            <input id="showDetails" type="checkbox" />
+            <label for="showDetails" style="margin:0;">顯示詳細方案（列出枚舉結果）</label>
+        </div>
+        <button class="btn" id="calc">列出所有可行方案</button>
+
+        <p class="muted" style="margin-top:10px;">
+            - 會枚舉「從庫存 6/4/4/2/2/2 中挑任意子集合」使容量 ≥ 人數。<br/>
+            - 會列出所有方案（例如 16 人會看到 6/4/2/2/2、6/4/4/2、…）。<br/>
+            - 價格目前是估算，你可直接改下方 RATES。
+        </p>
+        <p class="muted small">
+            若你 8 人以下不開公共區域、8 人以上算包棟，這裡會在結果註記，但不會限制枚舉。
+        </p>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2>結果 <span class="tag" id="status">Ready</span></h2>
+        <div class="body" id="summary"></div>
+        <div class="body" id="results"></div>
+    </section>
+    </div>
+    <!-- ===== 試算表 Modal ===== -->
+    <div id="calcModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" id="calcClose"></div>
+
+    <div class="modal-sheet" role="dialog" aria-modal="true">
+        <div class="modal-head">
+        <div>
+            <div class="modal-title">方案試算</div>
+            <div class="modal-sub" id="calcSubtitle">-</div>
+        </div>
+        <button class="modal-x" id="calcCloseX">✕</button>
+        </div>
+
+        <div class="modal-body">
+        <div class="kv">
+            <div class="k">最低每人每晚</div><div class="v" id="minPPPN">-</div>
+            <div class="k">最低每晚</div><div class="v" id="minPN">-</div>
+
+            <div class="k">現在每晚</div><div class="v" id="nowPN">-</div>
+            <div class="k">現在每人每晚</div><div class="v" id="nowPPPN">-</div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid #eef0f5;margin:14px 0;">
+
+        <label>期望每人每晚價格（自行輸入）</label>
+        <input id="targetPPPN" type="number" inputmode="decimal" placeholder="例如 1200" />
+
+        <div class="kv" style="margin-top:10px;">
+            <div class="k">期望每晚</div><div class="v" id="targetPN">-</div>
+            <div class="k">期望總價</div><div class="v" id="targetTotal">-</div>
+        </div>
+
+        <p class="muted small" style="margin-top:10px;">
+            註：最低值取 weekday/holiday/longHoliday 中目前有填的價格；若某天別是 null 就不納入最低值比較。
+        </p>
+        </div>
+    </div>
+    </div>
+</main>
+
+<footer>純前端離線運算，不會上傳任何資料。</footer>
+
+<script>
+/** ===== 你可改的估價參數 =====
+ * 先用「每人每晚」估算，方便你之後替換成固定表格。
+ * dtype: weekday / holiday / longHoliday
+ */
+const RATES = {
+underOrEq8:   { weekday: 1000, holiday: 1100, longHoliday: 1200 }, // <=8
+from9to11:    { weekday: 1300, holiday: 1500, longHoliday: 1700 }, // 9-11（包棟較貴）
+from12plus:   { weekday: 1500, holiday: 1700, longHoliday: 2000 }, // >=12（之後你可改成表格價）
+};
+
+const INVENTORY = [6,4,4,2,2,2]; // 固定 6 間房
+
+const PRICE_BY_COMBO = {
+  // ===== 1–2 人 =====
+  "2": {
+    now: { weekday: 1500, holiday: 1800, longHoliday: 2000 },
+    min: { weekday: 1200, holiday: 1400, longHoliday: 1600 },
+  },
+
+  // ===== 3–4 人 =====
+  "4": {
+    now: { weekday: 2000, holiday: 2400, longHoliday: 2800 },
+    min: { weekday: 1800, holiday: 2200, longHoliday: 2600 },
+  },
+  "2/2": {
+    now: { weekday: 3000, holiday: 3600, longHoliday: 4000 },
+    min: { weekday: 2500, holiday: 3000, longHoliday: 3500 },
+  },
+
+  // ===== 5–6 人 =====
+  "6": {
+    now: { weekday: 6000, holiday: 7000, longHoliday: 8000 },
+    min: { weekday: 5000, holiday: 6000, longHoliday: 7000 },
+  },
+  "4/2": {
+    now: { weekday: 3500, holiday: 4200, longHoliday: 4800 },
+    min: { weekday: 3000, holiday: 3600, longHoliday: 4000 },
+  },
+  "2/2/2": {
+    now: { weekday: 4500, holiday: 5400, longHoliday: 6000 },
+    min: { weekday: 4000, holiday: 4800, longHoliday: 5400 },
+  },
+
+  // ===== 7–8 人 =====
+  "6/2": {
+    now: { weekday: 7500, holiday: 8800, longHoliday: 10000 },
+    min: { weekday: 6500, holiday: 7500, longHoliday: 8500 },
+  },
+  "4/4": {
+    now: { weekday: 4000, holiday: 4800, longHoliday: 5600 },
+    min: { weekday: 3500, holiday: 4200, longHoliday: 4800 },
+  },
+  "4/2/2": {
+    now: { weekday: 5000, holiday: 6000, longHoliday: 6800 },
+    min: { weekday: 4500, holiday: 5400, longHoliday: 6000 },
+  },
+
+  // ===== 9–10 人 =====
+  "6/4": {
+    now: { weekday: 20000, holiday: 23000, longHoliday: 28000 },
+    min: { weekday: 18000, holiday: 20000, longHoliday: 24000 },
+  },
+  "6/2/2": {
+    now: { weekday: 21000, holiday: 24000, longHoliday: 29000 },
+    min: { weekday: 19000, holiday: 21000, longHoliday: 26000 },
+  },
+  "4/4/2": {
+    now: { weekday: 19000, holiday: 22000, longHoliday: 26800 },
+    min: { weekday: 17000, holiday: 19000, longHoliday: 22800 },
+  },
+  "4/2/2/2": {
+    now: { weekday: 20000, holiday: 23000, longHoliday: 28000 },
+    min: { weekday: 18000, holiday: 20000, longHoliday: 24000 },
+  },
+
+  // ===== 11–12 人 =====
+  "6/4/2": {
+    now: { weekday: 22000, holiday: 25000, longHoliday: 30000 },
+    min: { weekday: 20000, holiday: 22000, longHoliday: 26000 },
+  },
+  "6/2/2/2": {
+    now: { weekday: 23000, holiday: 26000, longHoliday: 32000 },
+    min: { weekday: 21000, holiday: 23000, longHoliday: 28000 },
+  },
+
+  // ✅ 12人（截圖：更新價=now，最低販售金額=min）
+  "4/4/2/2": {
+    now: { weekday: 21000, holiday: 24000, longHoliday: 28800 },
+    min: { weekday: 19000, holiday: 21000, longHoliday: 26000 },
+  },
+
+  // ===== 13–14 人 =====
+  "6/4/4": {
+    now: { weekday: 25000, holiday: 29000, longHoliday: 34000 },
+    min: { weekday: 23000, holiday: 25000, longHoliday: 30000 },
+  },
+
+  // ✅ 14人（截圖）
+  "4/4/2/2/2": {
+    now: { weekday: 24500, holiday: 28000, longHoliday: 33600 },
+    min: { weekday: 22000, holiday: 24000, longHoliday: 30000 },
+  },
+
+  // 你自己估的 14人另一組（截圖未提供最低價→先 null）
+  "6/4/2/2": {
+    now: { weekday: 26000, holiday: 30000, longHoliday: 36000 },
+    min: { weekday: 24000, holiday: 26000, longHoliday: 32000 },
+  },
+
+  // ===== 15–16 人 =====
+  "6/4/2/2/2": {
+    now: { weekday: 28000, holiday: 32000, longHoliday: 38400 },
+    min: { weekday: 24000, holiday: 29000, longHoliday: 35000 },
+  },
+  "6/4/4/2": {
+    now: { weekday: 27000, holiday: 31000, longHoliday: 37000 },
+    min: { weekday: 23000, holiday: 28000, longHoliday: 36000 },
+  },
+
+  // ===== 17–18 人 =====
+  "6/4/4/2/2": {
+    now: { weekday: 28800, holiday: 34000, longHoliday: 40500 },
+    min: { weekday: 26000, holiday: 31000, longHoliday: 37000 },
+  },
+
+  // ===== 19–20 人 =====
+  "6/4/4/2/2/2": {
+    now: { weekday: 32000, holiday: 36000, longHoliday: 43000 },
+    min: { weekday: 30000, holiday: 34000, longHoliday: 39000 },
+  },
+
+  // ===== 21–22 人（20+2：全開+和室）=====
+  "(6/4/4/2/2/2)+2": {
+    now: { weekday: 34000, holiday: 38000, longHoliday: 43000 }, // 你截圖連假=43000
+    min: { weekday: 32000, holiday: 36000, longHoliday: 41000 },    // ⚠️ 截圖右側最低欄位沒出現（被截掉），先留 null
+    note: "全開+和室雙人舖位(+2000)",
+  },
+};
+
+
+
+function dtype(isHoliday, isLongHoliday){
+if(isLongHoliday) return "longHoliday";
+return isHoliday ? "holiday" : "weekday";
+}
+
+function fmtMoney(n){ return "NT$ " + Math.round(n).toLocaleString("en-US"); }
+function formatKeyForDisplay(key){
+  // 只針對 +2 的情況加註解
+  // 支援 "(6/4/4/2/2/2)+2" 或 "6/4/4/2/2/2+2" 這兩種
+  if(/\+2$/.test(key)){
+    return `${key}（和室加床）`;
+  }
+  return key;
+}
+
+function fmtCombo(arr){ return arr.slice().sort((a,b)=>b-a).join("/"); }
+function sum(arr){ return arr.reduce((a,b)=>a+b,0); }
+
+function estimateTotal(people, nights, dtypeKey){
+let rate;
+if(people <= 8) rate = RATES.underOrEq8[dtypeKey];
+else if(people <= 11) rate = RATES.from9to11[dtypeKey];
+else rate = RATES.from12plus[dtypeKey];
+return rate * people * nights;
+}
+
+function publicAreaOpen(people){
+// 依你描述：8 人以下不開放公共區域；8 人以上包棟較貴
+return people >= 8;
+}
+
+// 枚舉庫存子集合：每間房「用/不用」，回傳所有容量>=people 的組合
+function enumerateCombos(people){
+  const rooms = INVENTORY.slice(); // [6,4,4,2,2,2]
+  const n = rooms.length;
+  const combos = [];
+
+  const FULL_KEY = "6/4/4/2/2/2"; // fmtCombo(full inventory)
+
+  // ===== case A: 1–20 人：正常枚舉子集合 =====
+  if(people <= 20){
+    for(let mask=1; mask < (1<<n); mask++){
+      const picked = [];
+      for(let i=0;i<n;i++){
+        if(mask & (1<<i)) picked.push(rooms[i]);
+      }
+
+      const cap = sum(picked);
+      const wasted = cap - people;
+
+      if(cap >= people && wasted <= 1){
+        combos.push({
+          rooms: picked.slice().sort((a,b)=>b-a),
+          cap,
+          wasted,
+          roomCount: picked.length,
+          extraBedsUsed: 0,
+        });
+      }
+    }
+
+    // 去重
+    const seen = new Set();
+    const unique = [];
+    for(const c of combos){
+      const key = fmtCombo(c.rooms);
+      if(seen.has(key)) continue;
+      seen.add(key);
+      unique.push({ ...c, key });
+    }
+
+    // 排序
+    unique.sort((a,b)=>{
+      if(a.roomCount !== b.roomCount) return a.roomCount - b.roomCount;
+      if(a.wasted !== b.wasted) return a.wasted - b.wasted;
+      return a.cap - b.cap;
+    });
+
+    return unique;
+  }
+
+  // ===== case B: 21–22 人：只允許 全開 +2（固定）=====
+  if(people > 22) return [];   // 超過 22 不接
+  const extraBedsUsed = 2;     // ✅ 固定 +2
+  const cap = 20 + extraBedsUsed; // 22
+  const wasted = cap - people;    // 21->1, 22->0
+
+  if(wasted > 1) return []; // 保險（其實不會）
+  const fullRoomsSorted = rooms.slice().sort((a,b)=>b-a);
+  const key = `(${FULL_KEY})+2`;
+
+  return [{
+    rooms: fullRoomsSorted,
+    cap,
+    wasted,
+    roomCount: fullRoomsSorted.length,
+    extraBedsUsed,
+    key,
+  }];
+}
+
+
+function render(people, nights, isHoliday, isLongHoliday, showDetails){
+    const s = document.getElementById("summary");
+    const r = document.getElementById("results");
+    s.innerHTML = "";
+    r.innerHTML = "";
+
+    const dtypeKey = dtype(isHoliday, isLongHoliday);
+
+    if(!(people>0 && nights>0)){
+        s.innerHTML = `<p class="muted warn">輸入不合法。</p>`;
+        return;
+    }
+
+    const combos = enumerateCombos(people);
+    const open = publicAreaOpen(people);
+    const mode = (people >= 8) ? "包棟（較貴）" : "非包棟（不開公共區域）";
+    const est = estimateTotal(people, nights, dtypeKey);
+
+    // 先畫摘要（不管是否詳細都會有）
+    // <div class="k">估價（備用）</div><div class="v"><b>${fmtMoney(est)}</b> <span class="small">（未命中組合價時使用）</span></div>
+    s.innerHTML = `
+        <div class="plan">
+        <h3>摘要</h3>
+        <div class="kv">
+            <div class="k">人數</div><div class="v">${people}</div>
+            <div class="k">晚數</div><div class="v">${nights}</div>
+            <div class="k">分項</div><div class="v">${dtypeKey === "weekday" ? "平日" : (dtypeKey === "holiday" ? "假日" : "連假")}</div>
+            <div class="k">模式註記</div><div class="v">${mode}</div>
+            <div class="k">公共區域</div><div class="v">${open ? "開放" : "不開放"}</div>
+            
+            <div class="k">可行方案數</div><div class="v"><b>${combos.length}</b></div>
+        </div>
+        </div>
+    `;
+
+
+    if(people > 22){
+        r.innerHTML = `<p class="muted warn">固定房間總容量是 22（6+4+4+2+2+2）+2。你輸入 ${people} 人會超載。</p>`;
+        return;
+    }
+
+    if(combos.length === 0){
+        r.innerHTML = `<p class="muted warn">沒有任何房型組合能容納 ${people} 人（或超過總容量 / 浪費床位限制）。</p>`;
+        return;
+    }
+
+    const rows = combos.map((c, idx)=>{
+    const price = priceForComboOrEstimate(c.key, people, nights, dtypeKey);
+    const pricedBy = (PRICE_BY_COMBO?.[c.key]?.now?.[dtypeKey] != null) ? "表" : "估";
+
+    return `
+        <tr>
+        <td class="right">${idx+1}</td>
+        <td><b class="combo-link" data-combo="${c.key}">${c.key}</b></td>
+        <td class="right">${c.roomCount}</td>
+        <td class="right">${c.cap}</td>
+        <td class="right">${c.wasted}</td>
+        <td class="right">${fmtMoney(price)} <span class="small">(${pricedBy})</span></td>
+        </tr>
+    `;
+    }).join("");
+
+    const tableHTML = `
+    <div class="plan">
+        <h3>所有枚舉方案（表格）</h3>
+        <table>
+        <thead>
+            <tr>
+            <th class="right">#</th>
+            <th>房型組合</th>
+            <th class="right">房間數</th>
+            <th class="right">可住</th>
+            <th class="right">浪費床位</th>
+            <th class="right">總價</th>
+            </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+        </table>
+    </div>
+    `;
+    r.innerHTML = tableHTML;
+
+    const TOP_K = 30;
+    const list = combos.slice(0, TOP_K);
+
+    // 把 [6,4,4,2] 轉成 六人房×1 + 四人房×2 + 雙人房×1
+    function comboToRoomText(rooms){
+        const count = {};
+        for(const x of rooms) count[x] = (count[x] || 0) + 1;
+        const order = [6,4,2];
+        const name = {6:"六人房", 4:"四人房", 2:"雙人房"};
+        return order.filter(k => count[k]).map(k => `${name[k]}×${count[k]}`).join(" + ");
+    }
+
+    if(!showDetails){
+        // 簡易模式：只顯示第一個方案（排序最前）
+        const c = list[0];
+        const total = priceForComboOrEstimate(c.key, people, nights, dtypeKey);
+
+        r.innerHTML += `
+        <div class="plan">
+            <h3>推薦方案</h3>
+            <div class="kv">
+            <div class="k">房型組合</div><div class="v">${comboToRoomText(c.rooms)} <span class="small combo-link" data-combo="${c.key}">(${formatKeyForDisplay(c.key)})</span></div>
+            <div class="k">可住人數</div><div class="v">${c.cap}（實際 ${people}，多 ${c.wasted} 床位）</div>
+            <div class="k">房間數</div><div class="v">${c.roomCount}</div>
+            <div class="k">是否節假日</div><div class="v">${dtypeKey==="weekday"?"否":(dtypeKey==="holiday"?"是":"連假")}</div>
+            <div class="k">住宿晚數</div><div class="v">${nights}</div>
+            <div class="k">總價</div><div class="v"><b>${fmtMoney(total)}</b></div>
+            </div>
+        </div>
+        `;
+        return;
+    }
+
+    // 詳細模式：列出卡片（像你圖那樣）
+    const cards = list.map((c, idx)=>{
+        const total = priceForComboOrEstimate(c.key, people, nights, dtypeKey);
+        const pricedBy = (PRICE_BY_COMBO[c.key] && PRICE_BY_COMBO[c.key][dtypeKey] != null) ? "表" : "估";
+
+        return `
+        <div class="plan">
+            <h3>方案 ${idx+1}</h3>
+            <div class="kv">
+            <div class="k">房型組合</div><div class="v">${comboToRoomText(c.rooms)} <span class="small combo-link" data-combo="${c.key}">(${formatKeyForDisplay(c.key)})</span></div>
+            <div class="k">可住人數</div><div class="v">${c.cap}（實際 ${people}，多 ${c.wasted} 床位）</div>
+            <div class="k">房間數</div><div class="v">${c.roomCount}</div>
+            <div class="k">是否節假日</div><div class="v">${dtypeKey==="weekday"?"否":(dtypeKey==="holiday"?"是":"連假")}</div>
+            <div class="k">住宿晚數</div><div class="v">${nights}</div>
+            <div class="k">總價</div><div class="v"><b>${fmtMoney(total)}</b> <span class="small">(${pricedBy})</span></div>
+            </div>
+        </div>
+        `;
+    }).join("");
+
+    r.innerHTML += cards;
+}
+
+
+function compute(){
+const people = Number(document.getElementById("people").value);
+const nights = Number(document.getElementById("nights").value);
+const isHoliday = document.getElementById("holiday").checked;
+const isLongHoliday = document.getElementById("longHoliday").checked;
+const showDetails = document.getElementById("showDetails").checked;
+
+render(people, nights, isHoliday, isLongHoliday, showDetails);
+
+
+const st = document.getElementById("status");
+st.textContent = "Updated";
+setTimeout(()=> st.textContent = "Ready", 700);
+}
+
+// iOS 檔案模式有時 input 事件表現怪，我用多種事件保險
+function bind(){
+document.getElementById("calc").addEventListener("click", compute);
+["people","nights"].forEach(id=>{
+    const el = document.getElementById(id);
+    el.addEventListener("input", compute);
+    el.addEventListener("change", compute);
+});
+
+["holiday","longHoliday","showDetails"].forEach(id=>{
+const el = document.getElementById(id);
+el.addEventListener("change", compute);
+el.addEventListener("click", compute);
+});
+document.getElementById("calcClose").addEventListener("click", closeCalcModal);
+document.getElementById("calcCloseX").addEventListener("click", closeCalcModal);
+document.getElementById("results").addEventListener("click", (e)=>{
+  const el = e.target.closest("[data-combo]");
+  if(!el) return;
+  const key = el.getAttribute("data-combo");
+  if(key) showCalculator(key);
+});
+
+
+// 首次渲染
+compute();
+}
+
+function priceForComboOrEstimate(comboKey, people, nights, dtypeKey){
+  const row = PRICE_BY_COMBO?.[comboKey];
+  const nowPrice = row?.now?.[dtypeKey];
+  if(typeof nowPrice === "number") return nowPrice * nights;
+  return estimateTotal(people, nights, dtypeKey);
+}
+
+
+// 確保 DOM ready
+if(document.readyState === "loading"){
+document.addEventListener("DOMContentLoaded", bind);
+}else{
+bind();
+}
+
+function openCalcModal(){
+  const m = document.getElementById("calcModal");
+  m.classList.remove("hidden");
+  m.setAttribute("aria-hidden", "false");
+}
+function closeCalcModal(){
+  const m = document.getElementById("calcModal");
+  m.classList.add("hidden");
+  m.setAttribute("aria-hidden", "true");
+}
+
+function safeNums(arr){
+  return arr.filter(v => typeof v === "number" && isFinite(v));
+}
+
+function calcStatsForCombo(comboKey, people, nights, dtypeKey){
+    const table = PRICE_BY_COMBO?.[comboKey] || null;
+
+    // 現在每晚：優先用表格；沒有就用 estimateTotal/晚數
+    const row = PRICE_BY_COMBO?.[comboKey] || null;
+
+    // 現在每晚：now
+    let nowPerNight = null;
+    const nowCandidate = row?.now?.[dtypeKey];
+    if(typeof nowCandidate === "number") nowPerNight = nowCandidate;
+    else nowPerNight = estimateTotal(people, nights, dtypeKey) / nights;
+
+    // 最低每晚：min（三日別取最小）
+    let minPN = null;
+    if(row?.min){
+    const mins = safeNums([row.min.weekday, row.min.holiday, row.min.longHoliday]);
+    if(mins.length > 0) minPN = Math.min(...mins);
+    }
+
+    const nowPPPN = nowPerNight / people;
+    const minPPPN = (minPN == null) ? null : (minPN / people);
+
+
+    return { table, nowPerNight, nowPPPN, minPN, minPPPN };
+}
+
+function showCalculator(comboKey){
+  const people = Number(document.getElementById("people").value);
+  const nights = Number(document.getElementById("nights").value);
+  const isHoliday = document.getElementById("holiday").checked;
+  const isLongHoliday = document.getElementById("longHoliday").checked;
+  const dtypeKey = dtype(isHoliday, isLongHoliday);
+
+  const { nowPerNight, nowPPPN, minPN, minPPPN } = calcStatsForCombo(comboKey, people, nights, dtypeKey);
+
+  document.getElementById("calcSubtitle").textContent =
+    `組合 ${comboKey}｜人數 ${people}｜晚數 ${nights}｜${dtypeKey==="weekday"?"平日":(dtypeKey==="holiday"?"假日":"連假")}`;
+
+  document.getElementById("minPPPN").textContent = (minPPPN==null) ? "-" : fmtMoney(minPPPN);
+  document.getElementById("minPN").textContent   = (minPN==null)   ? "-" : fmtMoney(minPN);
+
+  document.getElementById("nowPN").textContent   = fmtMoney(nowPerNight);
+  document.getElementById("nowPPPN").textContent = fmtMoney(nowPPPN);
+
+  // 期望值輸入：預設先帶入「現在每人每晚」方便你微調
+  const targetInput = document.getElementById("targetPPPN");
+  targetInput.value = Math.round(nowPPPN);
+
+  function recomputeTargets(){
+    const t = Number(targetInput.value);
+    if(!(t>0)){
+      document.getElementById("targetPN").textContent = "-";
+      document.getElementById("targetTotal").textContent = "-";
+      return;
+    }
+    const targetPerNight = t * people;
+    const targetTotal = t * people * nights;
+    document.getElementById("targetPN").textContent = fmtMoney(targetPerNight);
+    document.getElementById("targetTotal").textContent = fmtMoney(targetTotal);
+  }
+
+  targetInput.oninput = recomputeTargets;
+  recomputeTargets();
+
+  openCalcModal();
+}
+
+</script>
+</body>
+</html>
