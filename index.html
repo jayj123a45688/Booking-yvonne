@@ -628,29 +628,31 @@ function safeNums(arr){
 }
 
 function calcStatsForCombo(comboKey, people, nights, dtypeKey){
-    const table = PRICE_BY_COMBO?.[comboKey] || null;
+  const row = PRICE_BY_COMBO?.[comboKey] || null;
 
-    // 現在每晚：優先用表格；沒有就用 estimateTotal/晚數
-    const row = PRICE_BY_COMBO?.[comboKey] || null;
+  // 現在每晚（依 dtypeKey）：優先用 now 表，否則 fallback 估價
+  let nowPerNight;
+  const nowCandidate = row?.now?.[dtypeKey];
+  if (typeof nowCandidate === "number" && isFinite(nowCandidate)) {
+    nowPerNight = nowCandidate;
+  } else {
+    nowPerNight = estimateTotal(people, nights, dtypeKey) / nights;
+  }
 
-    // 現在每晚：now
-    let nowPerNight = null;
-    const nowCandidate = row?.now?.[dtypeKey];
-    if(typeof nowCandidate === "number") nowPerNight = nowCandidate;
-    else nowPerNight = estimateTotal(people, nights, dtypeKey) / nights;
+  // ✅ 現在每人每晚
+  const nowPPPN = (people > 0) ? (nowPerNight / people) : null;
 
-    // 最低每晚：min（三日別取最小）
-    let minPN = null;
-    if(row?.min){
-    const mins = safeNums([row.min.weekday, row.min.holiday, row.min.longHoliday]);
-    if(mins.length > 0) minPN = Math.min(...mins);
-    }
+  // 當前日別最低每晚（用 min 表）：沒有填就 null
+  let minPN = null;
+  const minCandidate = row?.min?.[dtypeKey];
+  if (typeof minCandidate === "number" && isFinite(minCandidate)) {
+    minPN = minCandidate;
+  }
 
-    const nowPPPN = nowPerNight / people;
-    const minPPPN = (minPN == null) ? null : (minPN / people);
+  // ✅ 最低每人每晚
+  const minPPPN = (minPN != null && people > 0) ? (minPN / people) : null;
 
-
-    return { table, nowPerNight, nowPPPN, minPN, minPPPN };
+  return { row, nowPerNight, nowPPPN, minPN, minPPPN };
 }
 
 function showCalculator(comboKey){
@@ -697,3 +699,4 @@ function showCalculator(comboKey){
 </script>
 </body>
 </html>
+
