@@ -32,6 +32,18 @@
       width: 100%;
       max-width: 220px;
     }
+    /* 讓隱藏的日期選取器圖示撐滿整個 input 寬高 */
+    #checkinDate::-webkit-calendar-picker-indicator {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        cursor: pointer;
+        opacity: 0; /* 雖然 input 已經透明了，這層也確保它不顯示 */
+    }
 
     .date-btn{
       width: 100%;
@@ -136,13 +148,24 @@
 
         <label>入住日期</label>
 
-        <div class="date-wrap">
-          <button type="button" class="date-btn" id="dateBtn">
+        <div class="date-wrap" style="position: relative; width: 100%; max-width: 220px; display: block; height: 42px;">
+          <button type="button" class="date-btn" id="dateBtn" 
+            style="width: 100%; height: 100%; pointer-events: none; margin: 0; box-sizing: border-box;">
             <span id="dateBtnText">請選擇日期</span>
             <span class="tag" id="dateTag">-</span>
           </button>
-          <input id="checkinDate" type="date" style="position:absolute; opacity:0; pointer-events:none; left:0; top:0; width:100%; height:100%;" />
+          
+          <input id="checkinDate" type="date" 
+            style="
+              position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+              opacity: 0; cursor: pointer; z-index: 10; margin: 0; padding: 0; 
+              border: none; display: block; box-sizing: border-box;
+              -webkit-appearance: none;
+            " 
+            onclick="this.showPicker && this.showPicker()"
+          />
         </div>
+
 
         <div class="muted small" id="dateHint" style="margin-top:6px;">-</div>
 
@@ -717,7 +740,7 @@ function compute(){
 
 // iOS 檔案模式有時 input 事件表現怪，我用多種事件保險
 function bind() {
-  // 1. 基本數值監聽
+  // 1. 基本數值監聽 (人數、晚數、顯示詳細)
   document.getElementById("calc").addEventListener("click", compute);
 
   ["people", "nights", "showDetails"].forEach(id => {
@@ -727,32 +750,9 @@ function bind() {
   });
 
   // 2. 日期處理
-  const dateBtn = document.getElementById("dateBtn");
   const dateInput = document.getElementById("checkinDate");
 
-  // 定義開啟日曆的函式
-  function openNativeCalendar(e) {
-    if (e) e.preventDefault();
-    
-    // 1. 嘗試現代瀏覽器的標準方法
-    if (typeof dateInput.showPicker === 'function') {
-      try {
-        dateInput.showPicker();
-        return;
-      } catch (err) {
-        console.warn("showPicker failed, trying fallback...");
-      }
-    }
-
-    // 2. 備用方案：先 focus 再 click (這對舊版 iOS 較有效)
-    dateInput.focus();
-    dateInput.click();
-  }
-
-  // 綁定按鈕點擊
-  dateBtn.addEventListener("click", openNativeCalendar);
-
-  // 當日期選完後，執行計算 (change 就夠了，input 在日期類型上反應不一)
+  // 移除手動 openNativeCalendar 觸發，改為監聽日期變動即可
   dateInput.addEventListener("change", compute);
 
   // 3. 彈窗與結果區域監聽
@@ -772,6 +772,8 @@ function bind() {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   dateInput.value = `${yyyy}-${mm}-${dd}`;
+  
+  // 初始化按鈕文字顯示
   document.getElementById("dateBtnText").textContent = dateInput.value;
 
   // 執行初始計算
