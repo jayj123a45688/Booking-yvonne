@@ -27,47 +27,42 @@
     box-sizing:border-box;
     }
 
+    /* ===== Date picker (stable cross-device) ===== */
     .date-wrap{
       position: relative;
       width: 100%;
       max-width: 220px;
     }
-    /* 電腦版：擴大點擊區域 */
-    #checkinDate::-webkit-calendar-picker-indicator {
-        display: block;
-        width: 100%;
-        height: 100%;
-        position: absolute;
-        top: 0; left: 0;
-        opacity: 0;
-        cursor: pointer;
-    }
 
-    /* 手機版：移除 iOS 預設樣式干擾 */
-    #checkinDate {
-        -webkit-appearance: listbox; /* 有助於在某些 iOS 版本彈出選單 */
-    }
-
+    /* 你的日期按鈕外觀（只留一份，不要重複定義） */
     .date-btn{
       width: 100%;
-      max-width: none; /* 因為外層已經 max-width 220 */
-    }
-
-    .date-btn{
-      width:100%;
-      max-width: 220px;
-      padding:10px 12px;
-      border:1px solid #d9dde7;
-      border-radius:12px;
-      background:#fff;
-      font-size:15px;
-      text-align:left;
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      box-sizing:border-box;
+      padding: 10px 12px;
+      border: 1px solid #d9dde7;
+      border-radius: 12px;
+      background: #fff;
+      font-size: 15px;
+      text-align: left;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-sizing: border-box;
     }
     .date-btn:active{ transform: scale(.99); }
+
+    /* ✅ 核心：讓 input 覆蓋整個按鈕區域，使用者實際點到的是 input */
+    .date-overlay{
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;              /* 看不見但可點 */
+      cursor: pointer;
+      pointer-events: auto;    /* 一定要可互動 */
+      z-index: 10;             /* 蓋在 button 上 */
+      -webkit-appearance: none;
+      appearance: none;
+}
 
     .toggle { display:flex; align-items:center; gap:10px; margin-top:10px; }
     .btn { width:100%; margin-top:12px; padding:11px 12px; border:none; border-radius:12px; font-size:16px; background:#111; color:#fff; }
@@ -151,24 +146,14 @@
 
         <label>入住日期</label>
 
-        <div class="date-wrap" style="position: relative; width: 100%; max-width: 220px; height: 45px; background: #fff; border-radius: 12px; overflow: hidden;">
-          <button type="button" class="date-btn" id="dateBtn" 
-            style="width: 100%; height: 100%; pointer-events: none; border: 1px solid #d9dde7; border-radius: 12px;">
+        <div class="date-wrap">
+          <button type="button" class="date-btn" id="dateBtn">
             <span id="dateBtnText">請選擇日期</span>
             <span class="tag" id="dateTag">-</span>
           </button>
-          
-          <input id="checkinDate" type="date" 
-            style="
-              position: absolute; 
-              top: 0; left: 0; 
-              width: 100%; height: 100%; 
-              opacity: 0; 
-              display: block;
-              cursor: pointer; 
-              z-index: 99;
-              font-size: 16px; /* 防止 iOS 點擊時自動放大頁面 */
-            " />
+
+          <!-- ✅ 透明覆蓋在 button 上，但可互動 -->
+          <input id="checkinDate" type="date" class="date-overlay" />
         </div>
 
 
