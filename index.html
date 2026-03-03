@@ -27,6 +27,33 @@
     box-sizing:border-box;
     }
 
+    .date-wrap{
+      position: relative;
+      width: 100%;
+      max-width: 220px;
+    }
+
+    .date-btn{
+      width: 100%;
+      max-width: none; /* 因為外層已經 max-width 220 */
+    }
+
+    .date-btn{
+      width:100%;
+      max-width: 220px;
+      padding:10px 12px;
+      border:1px solid #d9dde7;
+      border-radius:12px;
+      background:#fff;
+      font-size:15px;
+      text-align:left;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      box-sizing:border-box;
+    }
+    .date-btn:active{ transform: scale(.99); }
+
     .toggle { display:flex; align-items:center; gap:10px; margin-top:10px; }
     .btn { width:100%; margin-top:12px; padding:11px 12px; border:none; border-radius:12px; font-size:16px; background:#111; color:#fff; }
     .btn:active { transform: scale(.99); }
@@ -98,14 +125,27 @@
         <label>晚數</label>
         <input id="nights" type="number" min="1" max="30" value="1" inputmode="numeric" />
 
-        <div class="toggle">
+        <!-- <div class="toggle">
             <input id="holiday" type="checkbox" />
             <label for="holiday" style="margin:0;">假日</label>
         </div>
         <div class="toggle">
             <input id="longHoliday" type="checkbox" />
             <label for="longHoliday" style="margin:0;">連假</label>
+        </div> -->
+
+        <label>入住日期</label>
+
+        <div class="date-wrap">
+          <button type="button" class="date-btn" id="dateBtn">
+            <span id="dateBtnText">請選擇日期</span>
+            <span class="tag" id="dateTag">-</span>
+          </button>
+          <input id="checkinDate" type="date" style="position:absolute; visibility:hidden; width:0; height:0;" />
         </div>
+
+        <div class="muted small" id="dateHint" style="margin-top:6px;">-</div>
+
         <div class="toggle">
             <input id="showDetails" type="checkbox" />
             <label for="showDetails" style="margin:0;">顯示詳細方案（列出枚舉結果）</label>
@@ -118,7 +158,7 @@
             - 價格目前是估算，你可直接改下方 RATES。
         </p>
         <p class="muted small">
-            若你 8 人以下不開公共區域、8 人以上算包棟，這裡會在結果註記，但不會限制枚舉。
+            若你 8 人或以下不開公共區域、9 人以上算包棟，這裡會在結果註記，但不會限制枚舉。
         </p>
         </div>
     </section>
@@ -171,6 +211,7 @@
 
 <footer>純前端離線運算，不會上傳任何資料。</footer>
 
+<script src="calendar_2026.js"></script>
 <script>
 /** ===== 你可改的估價參數 =====
  * 先用「每人每晚」估算，方便你之後替換成固定表格。
@@ -313,10 +354,105 @@ const PRICE_BY_COMBO = {
 
 
 
-function dtype(isHoliday, isLongHoliday){
-if(isLongHoliday) return "longHoliday";
-return isHoliday ? "holiday" : "weekday";
+// ===== 政府行事曆：NTPC Open Data =====
+const CAL_API = "https://data.ntpc.gov.tw/api/datasets/308dcd75-6434-45bc-a95f-584da4fed251/json";
+
+let CAL_MAP = new Map(); // dateStr -> { isHoliday, holidayCategory, name }
+
+// 只抓某一年（避免一次載入 2017-2026 太慢）
+async function loadCalendarYear(year){
+  const url = `${CAL_API}?$filter=year%20eq%20${year}&page=0&size=2000`;
+  const res = await fetch(url, { cache: "no-store" });
+  if(!res.ok) throw new Error(`Calendar API failed: ${res.status}`);
+  const rows = await res.json();
+
+  const m = new Map();
+  for(const r of rows){
+    const dateStr = (r.date || "").slice(0,10); // yyyy-mm-dd
+    if(!dateStr) continue;
+
+    const isHoliday = (r.isholiday === 1 || r.isholiday === "1" || r.isholiday === true);
+    const cat = (r.holidaycategory ?? r.holidayCategory ?? "").toString(); // 欄位名容錯
+    const name = (r.name ?? r.holidayname ?? r.description ?? "").toString();
+
+    m.set(dateStr, { isHoliday, cat, name });
+  }
+  return m;
 }
+
+const LOADED_YEARS = new Set();
+
+async function ensureCalendarLoadedFor(dateStr) {
+  if (!dateStr) return;
+  const y = Number(dateStr.slice(0, 4));
+  if (!Number.isFinite(y) || LOADED_YEARS.has(y)) return;
+
+  try {
+    if (window.CAL_LOCAL && window.CAL_LOCAL[y]) {
+      const raw = window.CAL_LOCAL[y];
+      
+      Object.entries(raw).forEach(([shortDate, v]) => {
+        // 1. 格式化 Key: 20260101 -> 2026-01-01
+        const formattedKey = `${shortDate.slice(0, 4)}-${shortDate.slice(4, 6)}-${shortDate.slice(6, 8)}`;
+
+        // 2. 既然你說「只收錄放假的日子」，且「放假就是 0」
+        // 那只要這條資料存在，isHoliday 就是 true
+        CAL_MAP.set(formattedKey, {
+          isHoliday: true, // 強制標記為假日
+          cat: v.c || "",
+          name: v.n || ""
+        });
+      });
+      LOADED_YEARS.add(y);
+    }
+  } catch (e) {
+    console.error("日曆解析失敗:", e);
+  }
+}
+
+// 你可以依你的資料集實際內容調整：哪些 category 算 longHoliday
+function dtypeFromDate(dateStr) {
+  if (!dateStr) return "weekday";
+
+  // 1. 檢查當天是否在放假清單中
+  const info = CAL_MAP.get(dateStr);
+  if (!info || !info.isHoliday) {
+    return "weekday";
+  }
+
+  // 輔助函式：判斷某個偏移天數是否也是假日
+  const checkOffsetIsHoliday = (baseStr, diff) => {
+    const d = new Date(baseStr.replace(/-/g, '/'));
+    d.setDate(d.getDate() + diff);
+    const yStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return !!(CAL_MAP.get(yStr)?.isHoliday);
+  };
+
+  // 2. 判斷是否為「3 天以上」連假
+  // 我們檢查當天 (T) 周圍的鄰居狀態：
+  const d_2 = checkOffsetIsHoliday(dateStr, -2); // 前天
+  const d_1 = checkOffsetIsHoliday(dateStr, -1); // 昨天
+  const d1  = checkOffsetIsHoliday(dateStr, 1);  // 明天
+  const d2  = checkOffsetIsHoliday(dateStr, 2);  // 後天
+
+  // 只要符合以下任一條件，代表當天屬於至少 3 天連假的一部分：
+  // (1) 昨天、前天都是假 (T 是連假的第 3 天或之後)
+  // (2) 昨天、明天都是假 (T 是連假的中間)
+  // (3) 明天、後天都是假 (T 是連假的第 1 天)
+  const isAtLeastThreeDays = (d_1 && d_2) || (d_1 && d1) || (d1 && d2);
+
+  if (isAtLeastThreeDays) {
+    return "longHoliday";
+  }
+
+  // 3. 只有 1 天或 2 天的假，回傳一般假日 (holiday)
+  return "holiday";
+}
+
+function dtypeLabel(dtypeKey){
+  return dtypeKey==="weekday" ? "平日" : (dtypeKey==="holiday" ? "假日" : "連假");
+}
+
 
 function fmtMoney(n){ return "NT$ " + Math.round(n).toLocaleString("en-US"); }
 function formatKeyForDisplay(key){
@@ -341,7 +477,7 @@ return rate * people * nights;
 
 function publicAreaOpen(people){
 // 依你描述：8 人以下不開放公共區域；8 人以上包棟較貴
-return people >= 8;
+return people >= 9;
 }
 
 // 枚舉庫存子集合：每間房「用/不用」，回傳所有容量>=people 的組合
@@ -415,22 +551,20 @@ function enumerateCombos(people){
 }
 
 
-function render(people, nights, isHoliday, isLongHoliday, showDetails){
+function render(people, nights, dtypeKey, showDetails){
     const s = document.getElementById("summary");
     const r = document.getElementById("results");
     s.innerHTML = "";
     r.innerHTML = "";
 
-    const dtypeKey = dtype(isHoliday, isLongHoliday);
-
     if(!(people>0 && nights>0)){
-        s.innerHTML = `<p class="muted warn">輸入不合法。</p>`;
-        return;
+      s.innerHTML = `<p class="muted warn">輸入不合法。</p>`;
+      return;
     }
 
     const combos = enumerateCombos(people);
     const open = publicAreaOpen(people);
-    const mode = (people >= 8) ? "包棟（較貴）" : "非包棟（不開公共區域）";
+    const mode = (people >= 9) ? "包棟（較貴）" : "非包棟（不開公共區域）";
     const est = estimateTotal(people, nights, dtypeKey);
 
     // 先畫摘要（不管是否詳細都會有）
@@ -555,46 +689,90 @@ function render(people, nights, isHoliday, isLongHoliday, showDetails){
 
 
 function compute(){
-const people = Number(document.getElementById("people").value);
-const nights = Number(document.getElementById("nights").value);
-const isHoliday = document.getElementById("holiday").checked;
-const isLongHoliday = document.getElementById("longHoliday").checked;
-const showDetails = document.getElementById("showDetails").checked;
+  const people = Number(document.getElementById("people").value);
+  const nights = Number(document.getElementById("nights").value);
+  const showDetails = document.getElementById("showDetails").checked;
 
-render(people, nights, isHoliday, isLongHoliday, showDetails);
+  const dateStr = document.getElementById("checkinDate").value;
 
+  // 先確保已載入該年份行事曆，再算 dtypeKey
+  ensureCalendarLoadedFor(dateStr).then(()=>{
+    const dtypeKey = dtypeFromDate(dateStr);
 
-const st = document.getElementById("status");
-st.textContent = "Updated";
-setTimeout(()=> st.textContent = "Ready", 700);
+    render(people, nights, dtypeKey, showDetails);
+
+    // 更新日期顯示/標籤
+    document.getElementById("dateBtnText").textContent = dateStr || "請選擇日期";
+    document.getElementById("dateTag").textContent = dtypeLabel(dtypeKey);
+
+    const info = CAL_MAP.get(dateStr);
+    document.getElementById("dateHint").textContent =
+      dateStr ? `${dtypeLabel(dtypeKey)}${info?.name ? `（${info.name}）` : ""}` : "-";
+
+    const st = document.getElementById("status");
+    st.textContent = "Updated";
+    setTimeout(()=> st.textContent = "Ready", 700);
+  });
 }
 
 // iOS 檔案模式有時 input 事件表現怪，我用多種事件保險
-function bind(){
-document.getElementById("calc").addEventListener("click", compute);
-["people","nights"].forEach(id=>{
+function bind() {
+  // 1. 基本數值監聽
+  document.getElementById("calc").addEventListener("click", compute);
+
+  ["people", "nights", "showDetails"].forEach(id => {
     const el = document.getElementById(id);
     el.addEventListener("input", compute);
     el.addEventListener("change", compute);
-});
+  });
 
-["holiday","longHoliday","showDetails"].forEach(id=>{
-const el = document.getElementById(id);
-el.addEventListener("change", compute);
-el.addEventListener("click", compute);
-});
-document.getElementById("calcClose").addEventListener("click", closeCalcModal);
-document.getElementById("calcCloseX").addEventListener("click", closeCalcModal);
-document.getElementById("results").addEventListener("click", (e)=>{
-  const el = e.target.closest("[data-combo]");
-  if(!el) return;
-  const key = el.getAttribute("data-combo");
-  if(key) showCalculator(key);
-});
+  // 2. 日期處理
+  const dateBtn = document.getElementById("dateBtn");
+  const dateInput = document.getElementById("checkinDate");
 
+  // 定義開啟日曆的函式
+  function openNativeCalendar(e) {
+    if (e) e.preventDefault();
+    try {
+      if (dateInput.showPicker) {
+        dateInput.showPicker();
+      } else {
+        dateInput.focus();
+        dateInput.click();
+      }
+    } catch (err) {
+      // 某些瀏覽器安全機制若不支援 showPicker 的備用方案
+      dateInput.click();
+    }
+  }
 
-// 首次渲染
-compute();
+  // 綁定按鈕點擊
+  dateBtn.addEventListener("click", openNativeCalendar);
+
+  // 當日期選完後，執行計算 (change 就夠了，input 在日期類型上反應不一)
+  dateInput.addEventListener("change", compute);
+
+  // 3. 彈窗與結果區域監聽
+  document.getElementById("calcClose").addEventListener("click", closeCalcModal);
+  document.getElementById("calcCloseX").addEventListener("click", closeCalcModal);
+
+  document.getElementById("results").addEventListener("click", (e) => {
+    const el = e.target.closest("[data-combo]");
+    if (!el) return;
+    const key = el.getAttribute("data-combo");
+    if (key) showCalculator(key);
+  });
+
+  // 4. 初始化預設日期 (今天)
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  dateInput.value = `${yyyy}-${mm}-${dd}`;
+  document.getElementById("dateBtnText").textContent = dateInput.value;
+
+  // 執行初始計算
+  compute();
 }
 
 function priceForComboOrEstimate(comboKey, people, nights, dtypeKey){
@@ -655,48 +833,49 @@ function calcStatsForCombo(comboKey, people, nights, dtypeKey){
   return { row, nowPerNight, nowPPPN, minPN, minPPPN };
 }
 
+
 function showCalculator(comboKey){
   const people = Number(document.getElementById("people").value);
   const nights = Number(document.getElementById("nights").value);
-  const isHoliday = document.getElementById("holiday").checked;
-  const isLongHoliday = document.getElementById("longHoliday").checked;
-  const dtypeKey = dtype(isHoliday, isLongHoliday);
+  const dateStr = document.getElementById("checkinDate").value;
 
-  const { nowPerNight, nowPPPN, minPN, minPPPN } = calcStatsForCombo(comboKey, people, nights, dtypeKey);
+  ensureCalendarLoadedFor(dateStr).then(()=>{
+    const dtypeKey = dtypeFromDate(dateStr);
 
-  document.getElementById("calcSubtitle").textContent =
-    `組合 ${comboKey}｜人數 ${people}｜晚數 ${nights}｜${dtypeKey==="weekday"?"平日":(dtypeKey==="holiday"?"假日":"連假")}`;
+    const { nowPerNight, nowPPPN, minPN, minPPPN } =
+      calcStatsForCombo(comboKey, people, nights, dtypeKey);
 
-  document.getElementById("minPPPN").textContent = (minPPPN==null) ? "-" : fmtMoney(minPPPN);
-  document.getElementById("minPN").textContent   = (minPN==null)   ? "-" : fmtMoney(minPN);
+    document.getElementById("calcSubtitle").textContent =
+      `組合 ${formatKeyForDisplay(comboKey)}｜日期 ${dateStr||"-"}｜人數 ${people}｜晚數 ${nights}｜${dtypeLabel(dtypeKey)}`;
 
-  document.getElementById("nowPN").textContent   = fmtMoney(nowPerNight);
-  document.getElementById("nowPPPN").textContent = fmtMoney(nowPPPN);
+    document.getElementById("minPPPN").textContent = (minPPPN==null) ? "-" : fmtMoney(minPPPN);
+    document.getElementById("minPN").textContent   = (minPN==null)   ? "-" : fmtMoney(minPN);
 
-  // 期望值輸入：預設先帶入「現在每人每晚」方便你微調
-  const targetInput = document.getElementById("targetPPPN");
-  targetInput.value = Math.round(nowPPPN);
+    document.getElementById("nowPN").textContent   = fmtMoney(nowPerNight);
+    document.getElementById("nowPPPN").textContent = (nowPPPN==null) ? "-" : fmtMoney(nowPPPN);
 
-  function recomputeTargets(){
-    const t = Number(targetInput.value);
-    if(!(t>0)){
-      document.getElementById("targetPN").textContent = "-";
-      document.getElementById("targetTotal").textContent = "-";
-      return;
+    const targetInput = document.getElementById("targetPPPN");
+    targetInput.value = Math.round(nowPPPN || 0);
+
+    function recomputeTargets(){
+      const t = Number(targetInput.value);
+      if(!(t>0)){
+        document.getElementById("targetPN").textContent = "-";
+        document.getElementById("targetTotal").textContent = "-";
+        return;
+      }
+      const targetPerNight = t * people;
+      const targetTotal = t * people * nights;
+      document.getElementById("targetPN").textContent = fmtMoney(targetPerNight);
+      document.getElementById("targetTotal").textContent = fmtMoney(targetTotal);
     }
-    const targetPerNight = t * people;
-    const targetTotal = t * people * nights;
-    document.getElementById("targetPN").textContent = fmtMoney(targetPerNight);
-    document.getElementById("targetTotal").textContent = fmtMoney(targetTotal);
-  }
 
-  targetInput.oninput = recomputeTargets;
-  recomputeTargets();
-
-  openCalcModal();
+    targetInput.oninput = recomputeTargets;
+    recomputeTargets();
+    openCalcModal();
+  });
 }
 
 </script>
 </body>
 </html>
-
