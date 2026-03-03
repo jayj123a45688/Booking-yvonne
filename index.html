@@ -151,14 +151,24 @@
 
         <label>入住日期</label>
 
-        <div class="date-wrap" style="position: relative; width: 100%; max-width: 220px;">
-          <button type="button" class="date-btn" id="dateBtn" style="width: 100%; cursor: pointer;">
+        <div class="date-wrap" style="position: relative; width: 100%; max-width: 220px; height: 45px; background: #fff; border-radius: 12px; overflow: hidden;">
+          <button type="button" class="date-btn" id="dateBtn" 
+            style="width: 100%; height: 100%; pointer-events: none; border: 1px solid #d9dde7; border-radius: 12px;">
             <span id="dateBtnText">請選擇日期</span>
             <span class="tag" id="dateTag">-</span>
           </button>
           
           <input id="checkinDate" type="date" 
-            style="position: absolute; left: 0; top: 0; opacity: 0.01; pointer-events: none; width: 1px; height: 1px;" />
+            style="
+              position: absolute; 
+              top: 0; left: 0; 
+              width: 100%; height: 100%; 
+              opacity: 0; 
+              display: block;
+              cursor: pointer; 
+              z-index: 99;
+              font-size: 16px; /* 防止 iOS 點擊時自動放大頁面 */
+            " />
         </div>
 
 
@@ -745,34 +755,18 @@ function bind() {
   });
 
   // 2. 日期處理
-  const dateBtn = document.getElementById("dateBtn");
   const dateInput = document.getElementById("checkinDate");
   const dateBtnText = document.getElementById("dateBtnText");
 
-  // 【核心修改】當點擊按鈕時，強行呼叫日曆
-  dateBtn.addEventListener("click", (e) => {
-    e.preventDefault();
-    if (typeof dateInput.showPicker === 'function') {
-      try {
-        dateInput.showPicker();
-      } catch (err) {
-        // Fallback: 針對不支援 showPicker 的舊手機
-        dateInput.focus();
-        dateInput.click();
-      }
-    } else {
-      dateInput.focus();
-      dateInput.click();
-    }
-  });
-
-  // 當日期選完後，同步文字並計算
+  // 只要 input 值變動，就更新視覺按鈕的文字
   dateInput.addEventListener("change", () => {
-    dateBtnText.textContent = dateInput.value;
+    if (dateInput.value) {
+      dateBtnText.textContent = dateInput.value;
+    }
     compute();
   });
 
-  // 3. 彈窗與結果監聽 (保持不變)
+  // 3. 彈窗與結果監聽
   document.getElementById("calcClose").addEventListener("click", closeCalcModal);
   document.getElementById("calcCloseX").addEventListener("click", closeCalcModal);
   document.getElementById("results").addEventListener("click", (e) => {
@@ -780,12 +774,13 @@ function bind() {
     if (el) showCalculator(el.getAttribute("data-combo"));
   });
 
-  // 4. 初始化
+  // 4. 初始化日期
   const d = new Date();
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   const today = `${yyyy}-${mm}-${dd}`;
+  
   dateInput.value = today;
   dateBtnText.textContent = today;
 
