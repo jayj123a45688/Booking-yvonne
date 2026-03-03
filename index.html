@@ -151,15 +151,14 @@
 
         <label>入住日期</label>
 
-        <div class="date-wrap" style="position: relative; width: 100%; max-width: 220px; height: 42px;">
-          <button type="button" class="date-btn" id="dateBtn" 
-            style="width: 100%; height: 100%; pointer-events: none; margin: 0; position: relative; z-index: 1;">
+        <div class="date-wrap" style="position: relative; width: 100%; max-width: 220px;">
+          <button type="button" class="date-btn" id="dateBtn" style="width: 100%; cursor: pointer;">
             <span id="dateBtnText">請選擇日期</span>
             <span class="tag" id="dateTag">-</span>
           </button>
           
           <input id="checkinDate" type="date" 
-            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 5; -webkit-appearance: none;" />
+            style="position: absolute; left: 0; top: 0; opacity: 0.01; pointer-events: none; width: 1px; height: 1px;" />
         </div>
 
 
@@ -737,9 +736,8 @@ function compute(){
 // iOS 檔案模式有時 input 事件表現怪，我用多種事件保險
 
 function bind() {
-  // 1. 基本數值監聽 (人數、晚數、顯示詳細)
+  // 1. 基本數值監聽
   document.getElementById("calc").addEventListener("click", compute);
-
   ["people", "nights", "showDetails"].forEach(id => {
     const el = document.getElementById(id);
     el.addEventListener("input", compute);
@@ -747,49 +745,50 @@ function bind() {
   });
 
   // 2. 日期處理
+  const dateBtn = document.getElementById("dateBtn");
   const dateInput = document.getElementById("checkinDate");
   const dateBtnText = document.getElementById("dateBtnText");
 
-  // 當日期選完後，同步按鈕文字並執行計算
+  // 【核心修改】當點擊按鈕時，強行呼叫日曆
+  dateBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (typeof dateInput.showPicker === 'function') {
+      try {
+        dateInput.showPicker();
+      } catch (err) {
+        // Fallback: 針對不支援 showPicker 的舊手機
+        dateInput.focus();
+        dateInput.click();
+      }
+    } else {
+      dateInput.focus();
+      dateInput.click();
+    }
+  });
+
+  // 當日期選完後，同步文字並計算
   dateInput.addEventListener("change", () => {
     dateBtnText.textContent = dateInput.value;
     compute();
   });
 
-  // 【重點】為了解決手機點不到的問題，在 input 上強制補一個點擊觸發
-  // 即使透明遮蓋法失效，這行也能在使用者點擊時強行開啟日曆
-  dateInput.addEventListener("click", function() {
-    if (typeof this.showPicker === 'function') {
-      try {
-        this.showPicker();
-      } catch (e) {
-        console.error("Manual picker trigger failed:", e);
-      }
-    }
-  });
-
-  // 3. 彈窗與結果區域監聽
+  // 3. 彈窗與結果監聽 (保持不變)
   document.getElementById("calcClose").addEventListener("click", closeCalcModal);
   document.getElementById("calcCloseX").addEventListener("click", closeCalcModal);
-
   document.getElementById("results").addEventListener("click", (e) => {
     const el = e.target.closest("[data-combo]");
-    if (!el) return;
-    const key = el.getAttribute("data-combo");
-    if (key) showCalculator(key);
+    if (el) showCalculator(el.getAttribute("data-combo"));
   });
 
-  // 4. 初始化預設日期 (今天)
+  // 4. 初始化
   const d = new Date();
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   const today = `${yyyy}-${mm}-${dd}`;
-  
   dateInput.value = today;
   dateBtnText.textContent = today;
 
-  // 執行初始計算
   compute();
 }
 
