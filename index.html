@@ -141,7 +141,7 @@
             <span id="dateBtnText">請選擇日期</span>
             <span class="tag" id="dateTag">-</span>
           </button>
-          <input id="checkinDate" type="date" style="position:absolute; visibility:hidden; width:0; height:0;" />
+          <input id="checkinDate" type="date" style="position:absolute; opacity:0; pointer-events:none; left:0; top:0; width:100%; height:100%;" />
         </div>
 
         <div class="muted small" id="dateHint" style="margin-top:6px;">-</div>
@@ -733,17 +733,20 @@ function bind() {
   // 定義開啟日曆的函式
   function openNativeCalendar(e) {
     if (e) e.preventDefault();
-    try {
-      if (dateInput.showPicker) {
+    
+    // 1. 嘗試現代瀏覽器的標準方法
+    if (typeof dateInput.showPicker === 'function') {
+      try {
         dateInput.showPicker();
-      } else {
-        dateInput.focus();
-        dateInput.click();
+        return;
+      } catch (err) {
+        console.warn("showPicker failed, trying fallback...");
       }
-    } catch (err) {
-      // 某些瀏覽器安全機制若不支援 showPicker 的備用方案
-      dateInput.click();
     }
+
+    // 2. 備用方案：先 focus 再 click (這對舊版 iOS 較有效)
+    dateInput.focus();
+    dateInput.click();
   }
 
   // 綁定按鈕點擊
