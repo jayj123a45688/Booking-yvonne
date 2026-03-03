@@ -158,7 +158,7 @@
             - 價格目前是估算，你可直接改下方 RATES。
         </p>
         <p class="muted small">
-            若你 8 人以下不開公共區域、8 人以上算包棟，這裡會在結果註記，但不會限制枚舉。
+            若你 8 人或以下不開公共區域、9 人以上算包棟，這裡會在結果註記，但不會限制枚舉。
         </p>
         </div>
     </section>
@@ -477,7 +477,7 @@ return rate * people * nights;
 
 function publicAreaOpen(people){
 // 依你描述：8 人以下不開放公共區域；8 人以上包棟較貴
-return people >= 8;
+return people >= 9;
 }
 
 // 枚舉庫存子集合：每間房「用/不用」，回傳所有容量>=people 的組合
@@ -564,7 +564,7 @@ function render(people, nights, dtypeKey, showDetails){
 
     const combos = enumerateCombos(people);
     const open = publicAreaOpen(people);
-    const mode = (people >= 8) ? "包棟（較貴）" : "非包棟（不開公共區域）";
+    const mode = (people >= 9) ? "包棟（較貴）" : "非包棟（不開公共區域）";
     const est = estimateTotal(people, nights, dtypeKey);
 
     // 先畫摘要（不管是否詳細都會有）
